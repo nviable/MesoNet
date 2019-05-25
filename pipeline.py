@@ -1,23 +1,33 @@
 # -*- coding:utf-8 -*-
 
+#%%
 import random
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, isdir
 
 import numpy as np
 from math import floor
 from scipy.ndimage.interpolation import zoom, rotate
+from matplotlib import pyplot as plt
+from matplotlib import image as pltimg
 
 import imageio
 import face_recognition
 
+import cv2
+
+# flags
+SHOW_FACES = False  # view a grid of faces while they are being extracted
+SAVE_OUTPUT = False  # output the predictions as a video with annotated prediction result per frame
+
 
 ## Face extraction
 
+#%%
 class Video:
-    def __init__(self, path):
+    def __init__(self, path, is_video=True):
         self.path = path
-        self.container = imageio.get_reader(path, 'ffmpeg')
+        self.container = imageio.get_reader(path, 'ffmpeg') if is_video else FauxContainer(path)
         self.length = self.container.get_length()
         self.fps = self.container.get_meta_data()['fps']
     
@@ -35,11 +45,52 @@ class Video:
     
     def __len__(self):
         return self.length
+    
+    def show_frame(self, key):
+        self.container.show_frame(key)
 
+#%%
+'''
+    Imitate imageio.get_reader class functions to make the code think it's reading from a video
+'''
+class FauxContainer:    
+    def __init__(self, path, ext = ['.jpg', '.png']):
+        self.path = path
+        self.current_index = 0
+        self.frames = [imageio.imread(join(path, f)) for f in listdir(path) if isfile(join(path, f)) and ((f[-4:] in ext))]
+        self.length = self.get_length()
 
+    def get_next_data(self):
+        if( self.current_index == self.length):
+            print('Reached end of frames, resetting to 0')
+            self.current_index = 0
+        self.current_index += 1
+        return self.frames[self.current_index-1]
+    
+    def get_data(self, key):
+        if( self.current_index == self.length):
+            print('Reached end of frames, resetting to 0')
+            key = 0
+        return self.frames[key]
+    
+    def set_image_index(self, idx):
+        self.current_index = idx
+
+    def get_length(self):
+        return len(self.frames)
+    
+    def get_meta_data(self):
+        return { 'fps': 30 }
+    
+    def show_frame(self, key):
+        plt.imshow(self.get_data(key), interpolation='nearest')
+        plt.show()
+
+    
+#%%
 class FaceFinder(Video):
-    def __init__(self, path, load_first_face = True):
-        super().__init__(path)
+    def __init__(self, path, load_first_face = True, is_video=True):
+        super().__init__(path, is_video)
         self.faces = {}
         self.coordinates = {}  # stores the face (locations center, rotation, length)
         self.last_frame = self.get(0)
@@ -93,7 +144,7 @@ class FaceFinder(Video):
         '''
         We either choose K * distance(eyes, mouth),
         or, if the head is tilted, K * distance(eye 1, eye 2)
-        /!\ landmarks coordinates are in (x,y) not (y,x)
+        |!| landmarks coordinates are in (x,y) not (y,x)
         '''
         E1 = np.mean(landmark['left_eye'], axis=0)
         E2 = np.mean(landmark['right_eye'], axis=0)
@@ -264,11 +315,30 @@ class FaceBatchGenerator:
     
     def next_batch(self, batch_size = 50):
         batch = np.zeros((1, self.target_size, self.target_size, 3))
-        stop = min(self.head + batch_size, self.length)
+        # stop = min(self.head + batch_size, self.length)  # seems to be unused
         i = 0
+        if SHOW_FACES:
+            pl_num = 1  # variables for grid of faces
+            fig = plt.figure()  # variables for grid of faces        
         while (i < batch_size) and (self.head < self.length):
             if self.head in self.finder.coordinates:
                 patch = self.finder.get_aligned_face(self.head)
+                '''
+                > Print a grid of faces
+                '''
+
+                if( SHOW_FACES and i%5 == 0 and pl_num <= 4):
+                    print('adding subplot ', pl_num)
+                    ax = fig.add_subplot(2,2,pl_num)
+                    ax.imshow(patch, interpolation='nearest')
+                    pl_num += 1
+                if( SHOW_FACES and pl_num == 5 ):
+                    print('showing plots', pl_num)
+                    plt.show()
+                    pl_num += 1
+                '''
+                < End Print a grid of faces
+                '''
                 batch = np.concatenate((batch, np.expand_dims(self.resize_patch(patch), axis = 0)),
                                         axis = 0)
                 i += 1
@@ -289,25 +359,63 @@ def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
             profile = np.concatenate((profile, prediction))
     return profile[1:]
 
+'''
+    Complile predictions into a video and annotate each frame with a probability value
+'''
+def compile_predictions(name, face_finder, predictions):
+    img = face_finder.get(0)
+    out = cv2.VideoWriter("results/{}.avi".format(name), cv2.VideoWriter_fourcc(*'XVID'), 5, (img.shape[1], img.shape[0]))
+    #  messing up the image shape makes it silently break
+    for i, p in enumerate(predictions):
+        # print('working on frame {} of video {}'.format(i, name))  # extra logging
+        img = cv2.putText( face_finder.get(i),'fakeness prob: ' + str(p),
+            (50,50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255,255,255),
+            2)
+        # plt.imshow(img, interpolation='nearest')  # check whether frames are being annotated correctly
+        # plt.show()
+        out.write(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    out.release()
 
-def compute_accuracy(classifier, dirname, frame_subsample_count = 30):
-    '''
-    Extraction + Prediction over a video
-    '''
-    filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
+
+def compute_accuracy(classifier, dirname, frame_subsample_count = 30, is_video=True, ignore_folders=[]):
+    if is_video:
+        '''
+        Extraction + Prediction over a video
+        '''    
+        filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
+    else:
+        '''
+        Prediction over a sequence of images (extracted from a video)
+        ''' 
+        filenames = [f for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])]
     predictions = {}
     
-    for vid in filenames:
+    for count, vid in enumerate(filenames):
+        if count == 10:
+            break
         print('Dealing with video ', vid)
         
         # Compute face locations and store them in the face finder
-        face_finder = FaceFinder(join(dirname, vid), load_first_face = False)
+        face_finder = FaceFinder(join(dirname, vid), load_first_face = False, is_video=is_video)
         skipstep = max(floor(face_finder.length / frame_subsample_count), 0)
-        face_finder.find_faces(resize=0.5, skipstep = skipstep)
+        face_finder.find_faces(resize=0.5, skipstep = 0)  # changed skipstep
         
         print('Predicting ', vid)
         gen = FaceBatchGenerator(face_finder)
         p = predict_faces(gen, classifier)
-        
-        predictions[vid[:-4]] = (np.mean(p > 0.5), p)
+
+
+        prediction = np.mean(p > 0.5)
+        decision = '[FAKE]' if prediction>=0.5 else '[REAL]'
+        if SAVE_OUTPUT:
+            compile_predictions("{}-{}".format(vid, decision), face_finder, p)
+        print( 'Predicted video {} to be {} with accuracy of {}'.format(vid, decision, (prediction, p)) )
+
+        if(is_video):
+            predictions[vid[:-4]] = (prediction, p)
+        else:
+            predictions[vid] = (prediction, p)
     return predictions
