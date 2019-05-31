@@ -392,6 +392,7 @@ def print_training(history, evaluation):
     print(evaluation)
 
     # Plot training & validation accuracy values
+    plt.figure(1)
     plt.plot(history.history['acc'])
     plt.plot(history.history['val_acc'])
     plt.title('Model accuracy')
@@ -401,6 +402,7 @@ def print_training(history, evaluation):
     plt.savefig("graphs/accuracy.png")
 
     # Plot training & validation loss values
+    plt.figure(2)
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
     plt.title('Model loss')
