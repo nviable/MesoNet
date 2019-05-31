@@ -2,14 +2,15 @@
 
 #%%
 import random
-from os import listdir
-from os.path import isfile, join, isdir
+from os import listdir, makedirs
+from os.path import isfile, join, isdir, exists
 
 import numpy as np
 from math import floor
 from scipy.ndimage.interpolation import zoom, rotate
 from matplotlib import pyplot as plt
 from matplotlib import image as pltimg
+from random import shuffle
 
 import imageio
 import face_recognition
@@ -303,11 +304,12 @@ class FaceBatchGenerator:
     '''
     Made to deal with framesubsets of video.
     '''
-    def __init__(self, face_finder, target_size = 256):
+    def __init__(self, face_finder, target_size = 256, cl=-1):
         self.finder = face_finder
         self.target_size = target_size
         self.head = 0
         self.length = int(face_finder.length)
+        self.cl = cl
 
     def resize_patch(self, patch):
         m, n = patch.shape[:2]
@@ -326,7 +328,7 @@ class FaceBatchGenerator:
                 '''
                 > Print a grid of faces
                 '''
-
+                # print(">> Adding patch of shape: ", np.shape(patch), np.shape(np.expand_dims(self.resize_patch(patch), axis = 0)))
                 if( SHOW_FACES and i%5 == 0 and pl_num <= 4):
                     print('adding subplot ', pl_num)
                     ax = fig.add_subplot(2,2,pl_num)
@@ -343,7 +345,7 @@ class FaceBatchGenerator:
                                         axis = 0)
                 i += 1
             self.head += 1
-        return batch[1:]
+        return batch[1:] if self.cl == -1 else batch[1:], [self.cl] * len(batch[1:])
 
 
 def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
@@ -358,6 +360,110 @@ def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
         if (len(prediction) > 0):
             profile = np.concatenate((profile, prediction))
     return profile[1:]
+
+def data_generator(files, batch_size = 50, ignore_folders=[]):
+    total = len(files)
+    i = 0
+    while True:
+        vid = files[i][0]
+        y = files[i][1]
+        is_video = files[i][2]
+        if i == total:
+            print("### ran out of data, going back to list HEAD ###")
+            i = 0  # start from beginning of the list if we run out of data
+        # print(">>>>> Working on vid: ", vid)
+        face_finder = FaceFinder(vid, load_first_face = False, is_video=is_video)
+        face_finder.find_faces(resize=0.5, skipstep = 0)  # skipstep 0 because we do not want to skip frames in training
+        gen = FaceBatchGenerator(face_finder, cl=y)
+
+        while True:
+            try: 
+                x, y = gen.next_batch(batch_size = batch_size)
+                if np.shape(x)[0] == 0:
+                    # print("Got 0 lol plz help")
+                    break
+                # print(">>> Spitting out data of shape: ", np.shape(x), np.shape(y))
+            except StopIteration as e:
+                break
+            yield x, y
+        i += 1
+
+def print_training(history, evaluation):
+    print(evaluation)
+
+    # Plot training & validation accuracy values
+    plt.plot(history.history['acc'])
+    plt.plot(history.history['val_acc'])
+    plt.title('Model accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.savefig("graphs/accuracy.png")
+
+    # Plot training & validation loss values
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.savefig("graphs/loss.png")
+
+def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[]):
+
+    graph_path = "graphs"
+    if not exists(graph_path):
+        makedirs(graph_path)
+    
+    weight_path = "weights"
+    if not exists(weight_path):
+        makedirs(weight_path)
+    
+    model_path = "models"
+    if not exists(model_path):
+        makedirs(model_path)
+
+    batch_size = 50
+    n_epochs = 20
+    filenames = []
+    
+    for dirname, y, is_video in dirnames:            
+        if is_video:
+            '''
+            Extraction + Prediction over a video
+            '''    
+            filenames.extend([(join(dirname, f), y, is_video) for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))])
+        else:
+            '''
+            Prediction over a sequence of images (extracted from a video)
+            ''' 
+            filenames.extend([(join(dirname, f), y, is_video) for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])])
+    
+    shuffle(filenames)  # shuffle file names
+
+    # split data into train, val and test
+    total = len(filenames)
+    tr_max = floor(total*split[0])
+    val_max = tr_max + floor(total*split[1])
+    tr_f, val_f, te_f = filenames[:tr_max], filenames[tr_max:val_max], filenames[val_max:]
+
+    train_generator = data_generator(tr_f, batch_size=batch_size)
+    validation_generator = data_generator(val_f, batch_size=batch_size)
+    test_generator = data_generator(te_f, batch_size=batch_size)
+    
+    history = model.fit_generator(train_generator, steps_per_epoch=100, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=10, use_multiprocessing=True)
+
+    evaluation = model.evaluate_generator(test_generator, steps=100)
+
+    print_training(history, evaluation)
+
+    model_json = model.to_json()
+    with open(model_path + "/Meso4.json", "w") as json_file:
+        json_file.write(model_json)
+    json_file.close()
+        
+    model.save_weights(weight_path + '/Meso4_F2F_retrained.h5')
+
 
 '''
     Complile predictions into a video and annotate each frame with a probability value
