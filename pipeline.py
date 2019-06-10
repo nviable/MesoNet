@@ -29,7 +29,7 @@ class Video:
     def __init__(self, path, is_video=True):
         self.path = path
         self.container = imageio.get_reader(path, 'ffmpeg') if is_video else FauxContainer(path)
-        self.length = self.container.get_length()
+        self.length = self.container.count_frames()
         self.fps = self.container.get_meta_data()['fps']
     
     def init_head(self):
