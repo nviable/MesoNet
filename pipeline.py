@@ -383,6 +383,7 @@ def data_generator(files, batch_size = 50, ignore_folders=[]):
                     # print("Got 0 lol plz help")
                     break
                 # print(">>> Spitting out data of shape: ", np.shape(x), np.shape(y))
+                # print(">>> Spitting out data: ", files[i], y)
             except StopIteration as e:
                 break
             yield x, y
@@ -425,10 +426,13 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[]):
     if not exists(model_path):
         makedirs(model_path)
 
-    batch_size = 50
-    n_epochs = 20
+    batch_size = 40
+    n_epochs = 5
     filenames = []
-    
+    training_steps_per_epoch = 5
+    training_validation_steps = 2
+    test_steps = 5
+
     for dirname, y, is_video in dirnames:            
         if is_video:
             '''
@@ -442,7 +446,6 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[]):
             filenames.extend([(join(dirname, f), y, is_video) for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])])
     
     shuffle(filenames)  # shuffle file names
-
     # split data into train, val and test
     total = len(filenames)
     tr_max = floor(total*split[0])
@@ -453,9 +456,9 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[]):
     validation_generator = data_generator(val_f, batch_size=batch_size)
     test_generator = data_generator(te_f, batch_size=batch_size)
     
-    history = model.fit_generator(train_generator, steps_per_epoch=100, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=10, use_multiprocessing=True)
+    history = model.fit_generator(train_generator, steps_per_epoch=training_steps_per_epoch, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=training_validation_steps, use_multiprocessing=True)
 
-    evaluation = model.evaluate_generator(test_generator, steps=100)
+    evaluation = model.evaluate_generator(test_generator, steps=test_steps)
 
     print_training(history, evaluation)
 
