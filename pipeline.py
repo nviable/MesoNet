@@ -399,7 +399,7 @@ def print_training(history, evaluation):
     plt.title('Model accuracy')
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.legend(['Train', 'Validation'], loc='upper left')
     plt.savefig("graphs/accuracy.png")
 
     # Plot training & validation loss values
@@ -409,7 +409,7 @@ def print_training(history, evaluation):
     plt.title('Model loss')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.legend(['Train', 'Validation'], loc='upper left')
     plt.savefig("graphs/loss.png")
 
 def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5):
