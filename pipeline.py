@@ -412,7 +412,7 @@ def print_training(history, evaluation):
     plt.legend(['Train', 'Test'], loc='upper left')
     plt.savefig("graphs/loss.png")
 
-def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[]):
+def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5):
 
     graph_path = "graphs"
     if not exists(graph_path):
@@ -425,13 +425,6 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[]):
     model_path = "models"
     if not exists(model_path):
         makedirs(model_path)
-
-    batch_size = 40
-    n_epochs = 5
-    filenames = []
-    training_steps_per_epoch = 5
-    training_validation_steps = 2
-    test_steps = 5
 
     for dirname, y, is_video in dirnames:            
         if is_video:
