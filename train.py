@@ -51,12 +51,17 @@ def theModel():
 if __name__ == "__main__":
     # (<directory containing videos or folders for sequences>, <real_0/fake_1>, <is_video>)
     dirnames = [
-        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/images/original_sequences/raw/images', 0, 0),
-        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/images/manipulated_sequences/Face2Face/raw/images', 1, 0)
+        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/c23/videos', 0, True),
+        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/manipulated_sequences/Face2Face/c23/videos', 1, True)
     ]
-    is_video = False
-    data_split = (.5, .25, .25)
+    data_split = (.60, .20, .20)
 
-    train_network(theModel(), dirnames, split=data_split, ignore_folders=[])
+    filenames = []
+    batch_size = 40  # 40 frames per batch
+    n_epochs = 20
+    training_steps_per_epoch = 100  # kinda like epochs within epochs
+    training_validation_steps = 40  # same thing for validation
+    test_steps = 100
+
+    train_network(theModel(), dirnames, split=data_split, ignore_folders=[], batch_size=batch_size, n_epochs=n_epochs, filenames=filenames, training_steps_per_epoch=training_steps_per_epoch, training_validation_steps=training_validation_steps, test_steps=test_steps)
     
-
