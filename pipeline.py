@@ -11,6 +11,7 @@ from scipy.ndimage.interpolation import zoom, rotate
 from matplotlib import pyplot as plt
 from matplotlib import image as pltimg
 from random import shuffle
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 
 import imageio
 import face_recognition
@@ -389,8 +390,8 @@ def data_generator(files, batch_size = 50, ignore_folders=[]):
             yield x, y
         i += 1
 
-def print_training(history, evaluation):
-    print(evaluation)
+def print_training(model, history, evaluation):
+    print("{}: {}% | {}: {}%".format(model.metrics_names[0], evaluation[0]*100, model.metrics_names[1], evaluation[1]*100))
 
     # Plot training & validation accuracy values
     plt.figure(1)
@@ -412,7 +413,7 @@ def print_training(history, evaluation):
     plt.legend(['Train', 'Validation'], loc='upper left')
     plt.savefig("graphs/loss.png")
 
-def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5):
+def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5, model_name="meso4", data_name="f2f", epochs_to_wait_for_improve=5):
 
     graph_path = "graphs"
     if not exists(graph_path):
@@ -439,6 +440,7 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
             filenames.extend([(join(dirname, f), y, is_video) for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])])
     
     shuffle(filenames)  # shuffle file names
+    
     # split data into train, val and test
     total = len(filenames)
     tr_max = floor(total*split[0])
@@ -448,19 +450,26 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
     train_generator = data_generator(tr_f, batch_size=batch_size)
     validation_generator = data_generator(val_f, batch_size=batch_size)
     test_generator = data_generator(te_f, batch_size=batch_size)
+    weight_checkpoint_file = weight_path + '/weights.'+ model_name + '-' + data_name +'.best.h5'
     
-    history = model.fit_generator(train_generator, steps_per_epoch=training_steps_per_epoch, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=training_validation_steps, use_multiprocessing=True)
+    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=epochs_to_wait_for_improve, verbose=1, restore_best_weights=True)
+    checkpoint_callback = ModelCheckpoint(weight_checkpoint_file, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+
+    if(exists(weight_checkpoint_file)):
+        model.load_weights(weight_checkpoint_file)
+
+    history = model.fit_generator(train_generator, steps_per_epoch=training_steps_per_epoch, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=training_validation_steps, use_multiprocessing=True, callbacks=[early_stopping_callback, checkpoint_callback])
 
     evaluation = model.evaluate_generator(test_generator, steps=test_steps)
 
-    print_training(history, evaluation)
+    print_training(model, history, evaluation)
 
     model_json = model.to_json()
-    with open(model_path + "/Meso4.json", "w") as json_file:
+    with open(model_path + "/meso4.json", "w") as json_file:
         json_file.write(model_json)
     json_file.close()
         
-    model.save_weights(weight_path + '/Meso4_F2F_retrained.h5')
+    model.save_weights(weight_path + '/'+ model_name + '-' + data_name +'_retrained.h5')
 
 
 '''

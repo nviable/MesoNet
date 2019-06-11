@@ -58,10 +58,11 @@ if __name__ == "__main__":
 
     filenames = []
     batch_size = 40  # 40 frames per batch
-    n_epochs = 20
-    training_steps_per_epoch = 100  # kinda like epochs within epochs
-    training_validation_steps = 40  # same thing for validation
+    n_epochs = 100
+    training_steps_per_epoch = 300  # kinda like epochs within epochs
+    training_validation_steps = 100  # same thing for validation
     test_steps = 100
+    epochs_to_wait_for_improve = 5
 
-    train_network(theModel(), dirnames, split=data_split, ignore_folders=[], batch_size=batch_size, n_epochs=n_epochs, filenames=filenames, training_steps_per_epoch=training_steps_per_epoch, training_validation_steps=training_validation_steps, test_steps=test_steps)
+    train_network(theModel(), dirnames, split=data_split, ignore_folders=[], batch_size=batch_size, n_epochs=n_epochs, filenames=filenames, training_steps_per_epoch=training_steps_per_epoch, training_validation_steps=training_validation_steps, test_steps=test_steps, model_name='meso4', data_name='f2f', epochs_to_wait_for_improve = epochs_to_wait_for_improve)
     
