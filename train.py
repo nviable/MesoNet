@@ -4,6 +4,7 @@ from pipeline import *
 from keras.models import Model as KerasModel
 from keras.layers import Input, Dense, Flatten, Conv2D, MaxPooling2D, BatchNormalization, Dropout, Reshape, Concatenate, LeakyReLU
 from keras.optimizers import Adam
+from math import ceil
 
 from keras.preprocessing.image import ImageDataGenerator
 
@@ -62,7 +63,21 @@ if __name__ == "__main__":
     training_steps_per_epoch = 300  # kinda like epochs within epochs
     training_validation_steps = 100  # same thing for validation
     test_steps = 100
-    epochs_to_wait_for_improve = 5
+    epochs_to_wait_for_improve = ceil(n_epochs * 0.2)
+    frame_cutoff = 80  # if added, ignores **_steps_** variables
+
+    ''' To run code over all the files per epoch
+        Hence if we have 1000 files for each class
+        1,000 * 2       = 2,000 files
+        Tr, Te, Va      = 1200, 400, 400
+        Tr = 1,200 * 80 = 96,000 frames
+            96,000 / 40 = 2400 batches
+        Te = 400 * 80   = 32,000 frames
+            32,000 / 40 = 800 batches
+        Va = 400 * 80   = 32,000 frames
+            32,000 / 40 = 800 batches
+        steps_per_epoch = ceil(filenames * frame_cutoff / batch_size)
+    '''
 
     train_network(theModel(), dirnames, split=data_split, ignore_folders=[], batch_size=batch_size, n_epochs=n_epochs, filenames=filenames, training_steps_per_epoch=training_steps_per_epoch, training_validation_steps=training_validation_steps, test_steps=test_steps, model_name='meso4', data_name='f2f', epochs_to_wait_for_improve = epochs_to_wait_for_improve)
     

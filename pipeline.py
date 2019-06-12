@@ -6,7 +6,7 @@ from os import listdir, makedirs
 from os.path import isfile, join, isdir, exists
 
 import numpy as np
-from math import floor
+from math import floor, ceil
 from scipy.ndimage.interpolation import zoom, rotate
 from matplotlib import pyplot as plt
 from matplotlib import image as pltimg
@@ -362,14 +362,14 @@ def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
             profile = np.concatenate((profile, prediction))
     return profile[1:]
 
-def data_generator(files, batch_size = 50, ignore_folders=[]):
+def data_generator(files, batch_size = 50, ignore_folders=[], frame_cutoff=-1):
     total = len(files)
     i = 0
     while True:
         vid = files[i][0]
         y = files[i][1]
         is_video = files[i][2]
-        if i == total:
+        if i == total-1:
             print("### ran out of data, going back to list HEAD ###")
             i = 0  # start from beginning of the list if we run out of data
         # print(">>>>> Working on vid: ", vid)
@@ -413,7 +413,7 @@ def print_training(model, history, evaluation):
     plt.legend(['Train', 'Validation'], loc='upper left')
     plt.savefig("graphs/loss.png")
 
-def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5, model_name="meso4", data_name="f2f", epochs_to_wait_for_improve=5):
+def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5, model_name="meso4", data_name="f2f", epochs_to_wait_for_improve=5, frame_cutoff=-1):
 
     graph_path = "graphs"
     if not exists(graph_path):
@@ -440,16 +440,22 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
             filenames.extend([(join(dirname, f), y, is_video) for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])])
     
     shuffle(filenames)  # shuffle file names
-    
+
     # split data into train, val and test
     total = len(filenames)
     tr_max = floor(total*split[0])
     val_max = tr_max + floor(total*split[1])
     tr_f, val_f, te_f = filenames[:tr_max], filenames[tr_max:val_max], filenames[val_max:]
 
-    train_generator = data_generator(tr_f, batch_size=batch_size)
-    validation_generator = data_generator(val_f, batch_size=batch_size)
-    test_generator = data_generator(te_f, batch_size=batch_size)
+    if (frame_cutoff > -1):
+        # if a frame_cutoff is mentioned, recalculate the steps for each generator to run on all data per epoch
+        training_steps_per_epoch = ceil(len(tr_f) * frame_cutoff / batch_size)
+        training_validation_steps = ceil(len(val_f) * frame_cutoff / batch_size)
+        test_steps = ceil(len(te_f) * frame_cutoff / batch_size)
+
+    train_generator = data_generator(tr_f, batch_size=batch_size, frame_cutoff=frame_cutoff)
+    validation_generator = data_generator(val_f, batch_size=batch_size, frame_cutoff=frame_cutoff)
+    test_generator = data_generator(te_f, batch_size=batch_size, frame_cutoff=frame_cutoff)
     weight_checkpoint_file = weight_path + '/weights.'+ model_name + '-' + data_name +'.best.h5'
     
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=epochs_to_wait_for_improve, verbose=1, restore_best_weights=True)
@@ -465,7 +471,7 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
     print_training(model, history, evaluation)
 
     model_json = model.to_json()
-    with open(model_path + "/meso4.json", "w") as json_file:
+    with open(model_path + "/" + model_name + ".json", "w") as json_file:
         json_file.write(model_json)
     json_file.close()
         
