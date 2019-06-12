@@ -477,6 +477,25 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
         
     model.save_weights(weight_path + '/'+ model_name + '-' + data_name +'_retrained.h5')
 
+    training_settings = {
+        'model_name' : model_name,
+        'data_name' : data_name,
+        'dirnames' : dirnames,
+        'data_split' : split,
+        'filenames' : filenames,
+        'batch_size' : batch_size,
+        'n_epochs' : n_epochs,
+        'training_steps_per_epoch' : training_steps_per_epoch,
+        'training_validation_steps' : training_validation_steps,
+        'test_steps' : test_steps,
+        'epochs_to_wait_for_improve' : epochs_to_wait_for_improve,
+        'frame_cutoff' : frame_cutoff
+    }
+
+    with open(model_path + "/" + model_name + ".settings.json", "w") as json_file:
+        json_file.write(training_settings)
+    json_file.close()
+    
 
 '''
     Complile predictions into a video and annotate each frame with a probability value
