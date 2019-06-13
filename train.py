@@ -78,5 +78,5 @@ if __name__ == "__main__":
         steps_per_epoch = ceil(filenames * frame_cutoff / batch_size)
     '''
 
-    train_network(theModel(), dirnames, split=data_split, ignore_folders=[], batch_size=batch_size, n_epochs=n_epochs, filenames=filenames, training_steps_per_epoch=training_steps_per_epoch, training_validation_steps=training_validation_steps, test_steps=test_steps, model_name='meso4', data_name='f2f', epochs_to_wait_for_improve = epochs_to_wait_for_improve, frame_cutoff=frame_cutoff)
+    train_network(theModel(), dirnames, split=data_split, ignore_folders=[], batch_size=batch_size, n_epochs=n_epochs, training_steps_per_epoch=training_steps_per_epoch, training_validation_steps=training_validation_steps, test_steps=test_steps, model_name='meso4', data_name='f2f', epochs_to_wait_for_improve = epochs_to_wait_for_improve, frame_cutoff=frame_cutoff)
     

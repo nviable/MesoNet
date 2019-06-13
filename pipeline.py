@@ -365,10 +365,13 @@ def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
 def data_generator(files, batch_size = 50, ignore_folders=[], frame_cutoff=-1):
     total = len(files)
     i = 0
+    max_batches = ceil(frame_cutoff / batch_size)
     while True:
         vid = files[i][0]
         y = files[i][1]
         is_video = files[i][2]
+        batches_used = 0
+        
         if i == total-1:
             print("### ran out of data, going back to list HEAD ###")
             i = 0  # start from beginning of the list if we run out of data
@@ -378,8 +381,13 @@ def data_generator(files, batch_size = 50, ignore_folders=[], frame_cutoff=-1):
         gen = FaceBatchGenerator(face_finder, cl=y)
 
         while True:
-            try: 
+            try:
+                if batches_used == max_batches:
+                    break
+
                 x, y = gen.next_batch(batch_size = batch_size)
+                batches_used += 1
+
                 if np.shape(x)[0] == 0:
                     # print("Got 0 lol plz help")
                     break
@@ -413,7 +421,14 @@ def print_training(model, history, evaluation):
     plt.legend(['Train', 'Validation'], loc='upper left')
     plt.savefig("graphs/loss.png")
 
+
 def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batch_size = 40, n_epochs = 5, filenames = [], training_steps_per_epoch = 5, training_validation_steps = 2, test_steps = 5, model_name="meso4", data_name="f2f", epochs_to_wait_for_improve=5, frame_cutoff=-1):
+    """Training Function    
+
+    Args:
+        model (model): The model to be used for the training
+        dirnames (:array:`tuple`:(`str`,int,bool), optional): Names of the directories to add files from. Required
+    """
 
     graph_path = "graphs"
     if not exists(graph_path):
@@ -495,7 +510,7 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
     with open(model_path + "/" + model_name + ".settings.json", "w") as json_file:
         json_file.write(training_settings)
     json_file.close()
-    
+
 
 '''
     Complile predictions into a video and annotate each frame with a probability value
