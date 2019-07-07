@@ -11,7 +11,9 @@ from scipy.ndimage.interpolation import zoom, rotate
 from matplotlib import pyplot as plt
 from matplotlib import image as pltimg
 from random import shuffle
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
+import scipy.misc
+from pathlib import Path
 
 import imageio
 import face_recognition
@@ -266,6 +268,24 @@ class FaceFinder(Video):
             return patch
         return frame
     
+    def save_faces(self):
+        for i in range(self.length):
+            pp = Path(self.path)
+            parent_dir = pp.parent.parent.parent / 'extracted'
+            parent_dir.mkdir(exist_ok=True)
+            actual_dir = parent_dir / pp.parent.name
+            actual_dir.mkdir(exist_ok=True)
+            file_dir = actual_dir / pp.name
+            file_dir.mkdir(exist_ok=True)
+
+            # frame = self.get(i)
+            if i in self.faces:
+                # loc = self.faces[i]
+                patch = self.get_aligned_face(i)
+                # patch = frame[loc[0]:loc[2], loc[3]:loc[1]]
+                scipy.misc.imsave(str(file_dir) + '/' + str(i) + '.jpg', patch)
+                # return patch
+    
     @staticmethod
     def get_image_slice(img, y0, y1, x0, x1):
         '''Get values outside the domain of an image'''
@@ -348,6 +368,52 @@ class FaceBatchGenerator:
             self.head += 1
         return batch[1:] if self.cl == -1 else batch[1:], [self.cl] * len(batch[1:])
 
+class FaceBatchGeneratorStatic:
+    '''
+    Made to deal with framesubsets of video.
+    '''
+    def __init__(self, path, target_size = 256, cl=-1, ext = ['.jpg', '.png']):
+        self.faces = [imageio.imread(join(path, f)) for f in listdir(path) if isfile(join(path, f)) and ((f[-4:] in ext))]
+        self.target_size = target_size
+        self.head = 0
+        self.length = int(self.faces.length)
+        self.cl = cl
+
+    def resize_patch(self, patch):
+        m, n = patch.shape[:2]
+        return zoom(patch, (self.target_size / m, self.target_size / n, 1))
+    
+    def next_batch(self, batch_size = 50):
+        batch = np.zeros((1, self.target_size, self.target_size, 3))
+        # stop = min(self.head + batch_size, self.length)  # seems to be unused
+        i = 0
+        if SHOW_FACES:
+            pl_num = 1  # variables for grid of faces
+            fig = plt.figure()  # variables for grid of faces        
+        while (i < batch_size) and (self.head < self.length):
+            patch = self.faces[self.head]
+            '''
+            > Print a grid of faces
+            '''
+            # print(">> Adding patch of shape: ", np.shape(patch), np.shape(np.expand_dims(self.resize_patch(patch), axis = 0)))
+            if( SHOW_FACES and i%5 == 0 and pl_num <= 4):
+                print('adding subplot ', pl_num)
+                ax = fig.add_subplot(2,2,pl_num)
+                ax.imshow(patch, interpolation='nearest')
+                pl_num += 1
+            if( SHOW_FACES and pl_num == 5 ):
+                print('showing plots', pl_num)
+                plt.show()
+                pl_num += 1
+            '''
+            < End Print a grid of faces
+            '''
+            batch = np.concatenate((batch, np.expand_dims(self.resize_patch(patch), axis = 0)),
+                                    axis = 0)
+            i += 1
+            self.head += 1
+        return batch[1:] if self.cl == -1 else batch[1:], [self.cl] * len(batch[1:])
+
 
 def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
     '''
@@ -376,9 +442,9 @@ def data_generator(files, batch_size = 50, ignore_folders=[], frame_cutoff=-1):
             print("### ran out of data, going back to list HEAD ###")
             i = 0  # start from beginning of the list if we run out of data
         # print(">>>>> Working on vid: ", vid)
-        face_finder = FaceFinder(vid, load_first_face = False, is_video=is_video)
-        face_finder.find_faces(resize=0.5, skipstep = 0)  # skipstep 0 because we do not want to skip frames in training
-        gen = FaceBatchGenerator(face_finder, cl=y)
+        # face_finder = FaceFinder(vid, load_first_face = False, is_video=is_video)
+        # face_finder.find_faces(resize=0.5, skipstep = 0)  # skipstep 0 because we do not want to skip frames in training
+        gen = FaceBatchGeneratorStatic(vid, cl=y)
 
         while True:
             try:
@@ -397,6 +463,19 @@ def data_generator(files, batch_size = 50, ignore_folders=[], frame_cutoff=-1):
                 break
             yield x, y
         i += 1
+
+
+def face_savinator(files):
+    for file_tuple in files:
+        vid = file_tuple[0]
+        y = file_tuple[1]
+        is_video = file_tuple[2]
+
+        print("-> Working on ", vid)
+        face_finder = FaceFinder(vid, load_first_face = False, is_video=is_video)
+        face_finder.find_faces(resize=0.5, skipstep = 0)  # skipstep 0 because we do not want to skip frames in training
+        face_finder.save_faces()
+
 
 def print_training(model, history, evaluation):
     print("{}: {}% | {}: {}%".format(model.metrics_names[0], evaluation[0]*100, model.metrics_names[1], evaluation[1]*100))
@@ -442,6 +521,10 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
     if not exists(model_path):
         makedirs(model_path)
 
+    model_path = "logs"
+    if not exists(model_path):
+        makedirs(model_path)
+
     for dirname, y, is_video in dirnames:            
         if is_video:
             '''
@@ -475,11 +558,12 @@ def train_network(model, dirnames, split=(.5, .25, .25), ignore_folders=[], batc
     
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=epochs_to_wait_for_improve, verbose=1, restore_best_weights=True)
     checkpoint_callback = ModelCheckpoint(weight_checkpoint_file, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+    log_callback = TensorBoard(log_dir='./logs', update_freq='epoch')  # tensorboard --logdir=/logs
 
     if(exists(weight_checkpoint_file)):
         model.load_weights(weight_checkpoint_file)
 
-    history = model.fit_generator(train_generator, steps_per_epoch=training_steps_per_epoch, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=training_validation_steps, use_multiprocessing=True, callbacks=[early_stopping_callback, checkpoint_callback])
+    history = model.fit_generator(train_generator, steps_per_epoch=training_steps_per_epoch, verbose=1, epochs=n_epochs, validation_data=validation_generator, validation_steps=training_validation_steps, use_multiprocessing=True, callbacks=[early_stopping_callback, checkpoint_callback, log_callback])
 
     evaluation = model.evaluate_generator(test_generator, steps=test_steps)
 
