@@ -376,7 +376,7 @@ class FaceBatchGeneratorStatic:
         self.faces = [imageio.imread(join(path, f)) for f in listdir(path) if isfile(join(path, f)) and ((f[-4:] in ext))]
         self.target_size = target_size
         self.head = 0
-        self.length = int(self.faces.length)
+        self.length = len(self.faces)
         self.cl = cl
 
     def resize_patch(self, patch):

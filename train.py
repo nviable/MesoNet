@@ -52,8 +52,8 @@ def theModel():
 if __name__ == "__main__":
     # (<directory containing videos or folders for sequences>, <real_0/fake_1>, <is_video>)
     dirnames = [
-        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/c23/videos', 0, True),
-        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/manipulated_sequences/Face2Face/c23/videos', 1, True)
+        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/extracted/videos', 0, False),
+        ('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/manipulated_sequences/Face2Face/extracted/videos', 1, False)
     ]
     data_split = (.60, .20, .20)
 
