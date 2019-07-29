@@ -19,6 +19,7 @@ import imageio
 import face_recognition
 
 import cv2
+import json
 
 # flags
 SHOW_FACES = False  # view a grid of faces while they are being extracted
@@ -101,7 +102,7 @@ class FaceFinder(Video):
         self.frame_shape = self.last_frame.shape[:2]
         self.last_location = (0, 200, 200, 0)
         if (load_first_face):
-            face_positions = face_recognition.face_locations(self.last_frame, number_of_times_to_upsample=2)
+            face_positions = face_recognition.face_locations(self.last_frame, model="cnn")
             if len(face_positions) > 0:
                 self.last_location = face_positions[0]
     
@@ -227,7 +228,8 @@ class FaceFinder(Video):
 
                 if no_face_acc < no_face_acceleration_threshold:
                     # Look for face in full frame
-                    face_locations = face_recognition.face_locations(frame, number_of_times_to_upsample = 2)
+                    # face_locations = face_recognition.face_locations(frame, number_of_times_to_upsample = 2)
+                    face_locations = face_recognition.face_locations(frame)
                 else:
                     # Avoid spending to much time on a long scene without faces
                     reduced_frame = zoom(frame, (resize, resize, 1))
@@ -366,7 +368,8 @@ class FaceBatchGenerator:
                                         axis = 0)
                 i += 1
             self.head += 1
-        return batch[1:] if self.cl == -1 else batch[1:], [self.cl] * len(batch[1:])
+        return batch[1:]
+        #  if self.cl == -1 else batch[1:], [self.cl] * len(batch[1:])
 
 class FaceBatchGeneratorStatic:
     '''
@@ -617,17 +620,26 @@ def compile_predictions(name, face_finder, predictions):
     out.release()
 
 
-def compute_accuracy(classifier, dirname, frame_subsample_count = 30, is_video=True, ignore_folders=[]):
-    if is_video:
-        '''
-        Extraction + Prediction over a video
-        '''    
-        filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
+def compute_accuracy(classifier, dirname, frame_subsample_count = 30, is_video=True, ignore_folders=[], json_filenames=None):
+    if json_filenames != None:
+        filenames = []
+        with open(json_filenames) as map_file:
+            pairs = json.load(map_file)
+            for pair in pairs:
+                filenames.append('manipulated_sequences/c23/videos/' + pair[0] + '_' + pair[1] + '.mp4')
+                filenames.append('original_sequences/c23/videos/' + pair[0] + '.mp4')
+                filenames.append('original_sequences/c23/videos/' + pair[1] + '.mp4')
     else:
-        '''
-        Prediction over a sequence of images (extracted from a video)
-        ''' 
-        filenames = [f for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])]
+        if is_video:
+            '''
+            Extraction + Prediction over a video
+            '''    
+            filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
+        else:
+            '''
+            Prediction over a sequence of images (extracted from a video)
+            ''' 
+            filenames = [f for f in listdir(dirname) if isdir(join(dirname, f)) and (f not in ['processed', 'head', 'head2', 'head3', *ignore_folders])]
     predictions = {}
     
     for count, vid in enumerate(filenames):
@@ -642,14 +654,14 @@ def compute_accuracy(classifier, dirname, frame_subsample_count = 30, is_video=T
         
         print('Predicting ', vid)
         gen = FaceBatchGenerator(face_finder)
-        p = predict_faces(gen, classifier)
+        p = predict_faces(gen, classifier, batch_size=32)
 
 
         prediction = np.mean(p > 0.5)
         decision = '[FAKE]' if prediction>=0.5 else '[REAL]'
         if SAVE_OUTPUT:
             compile_predictions("{}-{}".format(vid, decision), face_finder, p)
-        print( 'Predicted video {} to be {} with accuracy of {}'.format(vid, decision, (prediction, p)) )
+        # print( 'Predicted video {} to be {} with accuracy of {}'.format(vid, decision, (prediction, p)) )
 
         if(is_video):
             predictions[vid[:-4]] = (prediction, p)
