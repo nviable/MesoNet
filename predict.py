@@ -47,9 +47,10 @@ class FaceFinder(Video):
         self.coordinates = {} # stores the face (locations center, rotation, length)
         self.last_frame = self.get(0)
         self.frame_shape = self.last_frame.shape[:2]
-        face_positions = face_recognition.face_locations(self.last_frame, model="cnn")
+        face_positions = face_recognition.face_locations(self.last_frame, number_of_times_to_upsample=2, model="cnn")
         self.last_location = face_positions[0]
         self.target_size = target_size
+        # self.last_location = (0, 200, 200, 0)
     
     def expand_location_zone(self, loc, margin = 0.2):
         ''' Adds a margin around a frame slice '''
@@ -248,10 +249,10 @@ def predict(file_dir, filename, model):
     data_name = 'f2f'
     weight_path = "./weights"
     # weights.MesoInception-F2F.best_2.h5
-    # weight_file = weight_path + '/weights.'+ model_name + '-' + data_name +'.best_2.h5'
-    weight_file = join(weight_path, ('weights.' + model + '-' + data_name + '.best.h5')) 
+    weight_file = join(weight_path, ('weights.'+ model + '-' + data_name +'.best_2.h5'))
+    # weight_file = join(weight_path, ('weights.' + model + '-' + data_name + '.best.h5')) 
     predictions = []
-    m = Meso4(learning_rate = 0.001)
+    m = MesoInception4(learning_rate = 0.001)
     m.model.summary()
     m.model.load_weights(weight_file)
 
@@ -259,7 +260,7 @@ def predict(file_dir, filename, model):
         pl_num = 1  # variables for grid of faces
         fig = plt.figure()  # variables for grid of faces     
         i = 0
-    for face in tqdm(face_finder.faces, desc="Predicting"):
+    for face in tqdm(face_finder.faces[1:], desc="Predicting"):
         '''
         > Print a grid of faces
         '''
@@ -283,8 +284,8 @@ def predict(file_dir, filename, model):
     return predictions
 
 if __name__ == "__main__":
-    print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/manipulated_sequences/Face2Face/c23/videos', '035_036.mp4', 'meso4'))
-    # print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/c23/videos', '035.mp4', 'meso4'))
+    # print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/manipulated_sequences/Face2Face/c23/videos', '035_036.mp4', 'MesoInception'))
+    print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/c23/videos', '035.mp4', 'MesoInception'))
 
 # for e in tqdm(range(n_epoch + 1)):
 #     X = []
