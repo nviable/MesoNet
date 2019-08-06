@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 from os import listdir, makedirs
 from os.path import isfile, join, isdir, exists
-from math import floor
 import tensorflow as tf
 import json
 from classifiers import MesoInception4
@@ -83,6 +82,7 @@ if __name__ == "__main__":
                 x_col='x_col',
                 y_col='y_col',
                 directory=None,
+                shuffle=True,
                 target_size=(256, 256),
                 batch_size=batch_size_train,
                 class_mode='binary'
@@ -98,6 +98,7 @@ if __name__ == "__main__":
                 x_col='x_col',
                 y_col='y_col',
                 directory=None,
+                shuffle=True,
                 target_size=(256, 256),
                 batch_size=batch_size_val,
                 class_mode='binary'
@@ -119,11 +120,11 @@ if __name__ == "__main__":
                 class_mode='binary')
         # Found 112098 validated image filenames belonging to 2 classes.
 
-        train_steps = floor(len(train_data_pd.index) / batch_size_train)
-        val_steps = floor(len(val_data_pd.index) / batch_size_val)
-        test_steps = floor(len(test_data_pd) / batch_size_test)
+        train_steps = len(train_data_pd.index) // batch_size_train
+        val_steps = len(val_data_pd.index) // batch_size_val
+        test_steps = len(test_data_pd) // batch_size_test
         epochs_to_wait_for_improve = 5
-        model_name = 'MesoInception'
+        model_name = 'MesoInception' 
         data_name = 'F2F'
         weight_path = "./weights"
         
@@ -145,6 +146,7 @@ if __name__ == "__main__":
                 validation_steps=val_steps, validation_data=gen_val,
                 max_queue_size=5, workers=4, use_multiprocessing=True)
 
+        m.model.save_weights(join(weight_path, model_name + '-' + data_name + '_retrained'))
         ## --- Evaluation on image dataset
 
         '''
@@ -165,10 +167,3 @@ if __name__ == "__main__":
 
         print('predicted mean', np.mean(predicted, axis=0))
         print('class mean :', np.mean(predicted[:split] < 0.5), np.mean(predicted[split:] > 0.5))
-
-
-        ## --- Evaluation on video with image aggregation
-
-        # predictions = compute_accuracy(classifier, 'test_videos')
-        # for video_name in predictions:
-        #     print('`{}` video class prediction :'.format(video_name), predictions[video_name][0])
