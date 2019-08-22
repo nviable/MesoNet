@@ -6,6 +6,7 @@ from math import floor
 import imageio
 import face_recognition
 from scipy.ndimage.interpolation import zoom, rotate
+from PIL import Image
 import tensorflow as tf
 import dlib
 dlib.DLIB_USE_CUDA = True
@@ -141,6 +142,8 @@ class FaceFinder(Video):
         for i in tqdm(finder_frameset, "Extracting faces"):
             # Get frame
             frame = self.get(i)
+            if( np.shape(frame)[0] > 480):
+                frame = np.array(Image.fromarray(frame).resize((640, 480)))  # some large videos break face extraction (small gpu)
             if (cut_left != 0 or cut_right != -1):
                 frame[:, :cut_left] = 0
                 frame[:, cut_right:] = 0            
@@ -285,7 +288,9 @@ def predict(file_dir, filename, model):
 
 if __name__ == "__main__":
     # print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/manipulated_sequences/Face2Face/c23/videos', '035_036.mp4', 'MesoInception'))
-    print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/c23/videos', '035.mp4', 'MesoInception'))
+    # print(predict('/home/js8365/data/Sandbox/dataset-deepfakes/FaceForensics/media/original_sequences/c23/videos', '035.mp4', 'MesoInception'))
+    print(predict('/home/js8365/data/Sandbox/DeFake/backend/videos', 'XnNwRO6DgQk.mp4', 'MesoInception'))
+
 
 # for e in tqdm(range(n_epoch + 1)):
 #     X = []
